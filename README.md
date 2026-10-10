@@ -16,10 +16,11 @@
 - 🎤 **原唱** ⇄ 🎹 **伴奏**：点一下切换，进度不跳
 - 👥 **跟唱**：弱原唱（带一点人声当引导）
 - 🎧 **人声**：只听人声，学旋律
+- 📝 **KTV 歌词**：跟着进度**逐字变色**，当前句放大；
+  点任意一句直接跳到那句；用 `↕` 按钮微调整体对齐（±0.2s 一档）
 - 🔁 **A-B 循环**：反复练某一句
 - ⏱ **预备拍**：起唱前给 4/8 秒准备
 - 🐢 **变速 0.5×–1.25×**：不跑调
-- 📝 **歌词**（可放 `lyrics`，见下）
 
 ---
 
@@ -90,12 +91,20 @@ python tools/make_pack.py 歌曲.mp3 --name "歌名"
 python tools/make_pack.py 原唱.mp4 --accompaniment 官方伴奏.mp4 --name "歌名"
 python tools/make_pack.py --scan          # 批量处理 songs/
 
-# 3) 打包电脑版
+# 3) 给跟唱包配歌词（把官方 LRC 对齐到你这版录音）
+#    官方 LRC 的时间轴是给官方发行版写的；换了录音（不同语言版本/母带）
+#    要重新对齐，否则歌词会整体偏几秒。
+python tools/make_lyrics.py library/歌名 lyrics/紫荆花盛开.lrc
+
+# 4) 打包电脑版
 python tools/build_exe.py                 # → dist/跟唱助手/
 python tools/build_exe.py onefile         # → dist/跟唱助手.exe
 
-# 4) 打包安卓版（需要 JDK 17 + Android SDK build-tools;34.0.0 platforms;android-34）
+# 5) 打包安卓版（需要 JDK 17 + Android SDK build-tools;34.0.0 platforms;android-34）
 python tools/build_apk.py                 # → 发布/跟唱助手.apk
+
+# 6) 收集发布产物
+python tools/package_release.py
 ```
 
 ---
@@ -152,6 +161,12 @@ python tools/build_apk.py                 # → 发布/跟唱助手.apk
 │       ├── Songs.java        # 歌曲库（内置 assets + 用户导入）
 │       └── MediaMeta.java
 ├── tools/                    # 构建与处理脚本
+│   ├── fetch_model.py        # 下载分离模型
+│   ├── make_pack.py          # 一首歌 → 跟唱包
+│   ├── make_lyrics.py        # 把 LRC 对齐到实际录音
+│   ├── build_exe.py / build_apk.py
+│   └── push_to_github.py / upload_ui.py
+├── lyrics/                   # 歌词（LRC）
 ├── library/                  # 跟唱包（不进仓库）
 ├── songs/                    # 待处理的原始歌曲（不进仓库）
 └── .github/workflows/
