@@ -30,7 +30,10 @@ def build(target="app", onedir=False):
     ff = imageio_ffmpeg.get_ffmpeg_exe()
 
     name = SEP_NAME if target == "separate" else APP_NAME
-    entry = os.path.join(common.APP, "separate.py" if target == "separate" else "entry.py")
+    # 主程序用原生窗口入口（pywebview / WebView2）——没有浏览器外壳、不弹标签页；
+    # 万一原生窗口起不来，entry_native 会自动退回 Edge --app 模式。
+    entry = os.path.join(common.APP,
+                         "separate.py" if target == "separate" else "entry_native.py")
     icon = os.path.join(common.UI, "app.ico")
     work = os.path.join(common.BUILD, name)
 
@@ -65,8 +68,16 @@ def build(target="app", onedir=False):
         seed = os.path.join(common.APP, "seed")
         if os.path.isdir(seed):
             args += ["--add-data", "%s;seed" % seed]
+        # 原生窗口：把 pywebview 的 .NET 组件和 WebView2Loader 一起带上
+        args += [
+            "--collect-all", "webview",
+            "--hidden-import", "clr_loader",
+            "--hidden-import", "pythonnet",
+            "--hidden-import", "webview.platforms.winforms",
+            "--hidden-import", "webview.platforms.edgechromium",
+        ]
     for m in ("torch", "torchaudio", "matplotlib", "librosa", "scipy", "pandas",
-              "PyQt5", "PySide2", "IPython", "pytest", "PIL", "webview",
+              "PyQt5", "PySide2", "IPython", "pytest", "PIL",
               "faster_whisper", "ctranslate2", "av", "numpy.f2py"):
         args += ["--exclude-module", m]
     args.append(entry)
