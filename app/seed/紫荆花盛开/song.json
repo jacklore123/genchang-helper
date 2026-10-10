@@ -1,0 +1,13 @@
+{
+  "name": "紫荆花盛开",
+  "duration": 193.399,
+  "sampleRate": 44100,
+  "source": "72726009ce1cdd273c7d7b3f1689560b.mp4",
+  "model": "UVR-MDX-NET Inst HQ 3",
+  "created": "2026-10-10 23:22:48",
+  "stems": [
+    "original",
+    "instrumental",
+    "vocals"
+  ]
+}
