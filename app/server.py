@@ -377,6 +377,28 @@ class Handler(BaseHTTPRequestHandler):
                 return self._file(full, ct + "; charset=utf-8")
         return self._send(404, b"not found", "text/plain")
 
+    def do_HEAD(self):
+        """浏览器取媒体时可能先发 HEAD，别让它拿到 501。"""
+        u = urllib.parse.urlparse(self.path)
+        path = urllib.parse.unquote(u.path)
+        if path.startswith("/media/"):
+            parts = [p for p in path[len("/media/"):].split("/") if p and p not in (".", "..")]
+            if len(parts) == 2:
+                full = os.path.join(library_dir(), parts[0], parts[1])
+                if os.path.isfile(full):
+                    size = os.path.getsize(full)
+                    ctype = {"m4a": "audio/mp4", "mp3": "audio/mpeg", "wav": "audio/wav",
+                             "flac": "audio/flac", "lrc": "text/plain; charset=utf-8"}.get(
+                        parts[1].rsplit(".", 1)[-1].lower(), "application/octet-stream")
+                    self.send_response(200)
+                    self.send_header("Content-Type", ctype)
+                    self.send_header("Content-Length", str(size))
+                    self.send_header("Accept-Ranges", "bytes")
+                    self.send_header("Cache-Control", "no-store")
+                    self.end_headers()
+                    return
+        return self._send(404, b"", "text/plain")
+
     def _sse(self, jid):
         with STORE_LOCK:
             job = STORE.get(jid)
