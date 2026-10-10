@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#12131a">
+<title>跟唱助手</title>
+<style>
+:root{
+  --bg:#12131a; --bg2:#1b1d28; --card:#232634; --line:#333747;
+  --fg:#f2f4fb; --dim:#9aa2bd; --brand:#ff5c7a; --brand2:#4dd6c1;
+  --accent:#7c8cff;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{
+  background:radial-gradient(1200px 700px at 50% -10%,#2a2f4a 0%,var(--bg) 60%);
+  color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",system-ui,sans-serif;
+  display:flex;flex-direction:column;align-items:center;
+  padding:env(safe-area-inset-top) 14px calc(14px + env(safe-area-inset-bottom));
+  overflow:hidden;
+}
+.wrap{width:100%;max-width:760px;height:100%;display:flex;flex-direction:column;gap:9px;padding-top:8px;overflow:hidden;min-height:0}
+.wrap>*{flex:0 0 auto}
+
+/* 顶栏 */
+.top{display:flex;align-items:center;gap:10px;min-height:46px}
+.title{font-size:17px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.title small{display:block;font-size:11px;color:var(--dim);font-weight:400;margin-top:2px}
+.iconbtn{
+  background:var(--card);border:1px solid var(--line);color:var(--fg);
+  border-radius:12px;height:40px;min-width:40px;padding:0 12px;font-size:14px;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;
+}
+.iconbtn:active{transform:scale(.96)}
+.iconbtn.on{background:var(--brand);border-color:var(--brand);color:#fff}
+
+/* 大按钮 */
+.big{
+  flex:1 1 0;min-height:0;border-radius:26px;border:2px solid var(--line);
+  background:linear-gradient(160deg,#2b3048,#1c1f2c);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+  cursor:pointer;user-select:none;position:relative;overflow:hidden;
+  transition:border-color .18s,background .18s,box-shadow .18s;
+}
+  background:linear-gradient(160deg,#2b3048,#1c1f2c);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  cursor:pointer;user-select:none;position:relative;overflow:hidden;
+  transition:border-color .18s,background .18s,box-shadow .18s;
+}
+.big:active{transform:scale(.985)}
+.big.mode-orig{border-color:#ff5c7a;box-shadow:0 0 0 1px rgba(255,92,122,.35),0 18px 50px -22px #ff5c7a}
+.big.mode-inst{border-color:#4dd6c1;box-shadow:0 0 0 1px rgba(77,214,193,.35),0 18px 50px -22px #4dd6c1}
+.big.mode-guide{border-color:#7c8cff;box-shadow:0 0 0 1px rgba(124,140,255,.35),0 18px 50px -22px #7c8cff}
+.big .em{font-size:clamp(44px,13vw,72px);line-height:1}
+.big .lb{font-size:clamp(24px,7vw,36px);font-weight:800;letter-spacing:2px}
+.big .hint{font-size:12px;color:var(--dim);letter-spacing:1px}
+.big .badge{
+  position:absolute;top:12px;right:14px;font-size:11px;color:var(--dim);
+  border:1px solid var(--line);border-radius:20px;padding:3px 9px;
+}
+
+/* 进度 */
+.progress{display:flex;align-items:center;gap:10px}
+.bar{flex:1;height:26px;display:flex;align-items:center;cursor:pointer;position:relative}
+.bar .track{width:100%;height:6px;background:#2c3042;border-radius:6px;position:relative}
+.bar .fill{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--brand2),var(--accent));border-radius:6px}
+.bar .knob{position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:-4px;margin-left:-7px;box-shadow:0 2px 6px #0008}
+.bar .ab{position:absolute;top:0;bottom:0;background:rgba(124,140,255,.35);border-radius:4px;display:none}
+.time{font-size:12px;color:var(--dim);font-variant-numeric:tabular-nums;min-width:42px;text-align:center}
+
+/* 主控 */
+.controls{display:flex;align-items:center;justify-content:center;gap:14px}
+.play{
+  width:72px;height:72px;border-radius:50%;border:none;cursor:pointer;
+  background:linear-gradient(160deg,#fff,#d8dcf0);color:#12131a;
+  font-size:28px;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 10px 30px -10px #000c;
+}
+.play:active{transform:scale(.95)}
+.cbtn{
+  width:52px;height:52px;border-radius:16px;background:var(--card);border:1px solid var(--line);
+  color:var(--fg);font-size:12px;cursor:pointer;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:2px;line-height:1.1;
+}
+.cbtn b{font-size:15px;font-weight:600}
+.cbtn.on{background:var(--accent);border-color:var(--accent);color:#fff}
+
+/* 工具行 */
+.tools{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.tools::-webkit-scrollbar{display:none}
+.chip{
+  flex:0 0 auto;background:var(--card);border:1px solid var(--line);color:var(--dim);
+  border-radius:999px;padding:7px 11px;font-size:12.5px;cursor:pointer;white-space:nowrap;
+}
+.chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+
+.slider{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--dim)}
+input[type=range]{-webkit-appearance:none;flex:1;height:4px;border-radius:4px;background:#2c3042;outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:#fff;cursor:pointer}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border:none;border-radius:50%;background:#fff;cursor:pointer}
+
+/* 弹层 */
+.sheet{
+  position:fixed;inset:0;background:rgba(8,9,14,.72);backdrop-filter:blur(6px);
+  display:none;align-items:flex-end;justify-content:center;z-index:50;
+}
+.sheet.open{display:flex}
+.sheet .panel{
+  width:100%;max-width:760px;max-height:86vh;overflow:auto;background:var(--bg2);
+  border-radius:22px 22px 0 0;padding:18px 18px calc(24px + env(safe-area-inset-bottom));
+  border-top:1px solid var(--line);
+}
+.sheet h3{margin:0 0 12px;font-size:16px}
+.songlist{display:flex;flex-direction:column;gap:8px}
+.songrow{
+  display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);
+  border-radius:14px;padding:12px 14px;cursor:pointer;
+}
+.songrow.sel{border-color:var(--accent)}
+.songrow .nm{flex:1;font-size:15px}
+.songrow .nm small{display:block;color:var(--dim);font-size:11px;margin-top:3px}
+.songrow .del{color:var(--dim);padding:6px 8px;font-size:16px}
+.drop{
+  border:2px dashed var(--line);border-radius:16px;padding:22px;text-align:center;
+  color:var(--dim);font-size:13px;cursor:pointer;margin-top:12px;
+}
+.drop.hot{border-color:var(--brand2);color:var(--brand2)}
+.log{
+  margin-top:12px;background:#0d0e14;border:1px solid var(--line);border-radius:12px;
+  padding:10px;font:12px/1.6 ui-monospace,Consolas,monospace;color:#b9c2dd;
+  max-height:190px;overflow:auto;white-space:pre-wrap;
+}
+.pbar{height:6px;background:#2c3042;border-radius:6px;overflow:hidden;margin-top:10px}
+.pbar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--brand2),var(--accent));transition:width .25s}
+.row{display:flex;gap:8px;align-items:center;margin-top:12px}
+.btn{
+  flex:1;background:var(--card);border:1px solid var(--line);color:var(--fg);
+  border-radius:12px;padding:13px;font-size:14px;cursor:pointer;text-align:center;
+}
+.btn.pri{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+.btn:active{transform:scale(.98)}
+.toast{
+  position:fixed;left:50%;bottom:34px;transform:translateX(-50%) translateY(20px);
+  background:#fff;color:#12131a;padding:10px 18px;border-radius:999px;font-size:13px;
+  opacity:0;pointer-events:none;transition:.25s;z-index:99;font-weight:600;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.empty{text-align:center;color:var(--dim);padding:40px 10px;font-size:14px;line-height:2}
+@media (max-height:640px){ .big{min-height:0} .big .em{font-size:34px} .big .lb{font-size:20px}
+  .play{width:56px;height:56px;font-size:22px} .cbtn{width:46px;height:46px} .top{min-height:38px} }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <div class="title" id="songTitle">未选择歌曲<small id="songSub">点右侧按钮选歌</small></div>
+    <button class="iconbtn" id="btnList">☰ 歌曲</button>
+  </div>
+
+  <div class="big mode-orig" id="bigBtn">
+    <span class="badge" id="bigBadge">1 / 2</span>
+    <div class="em" id="bigEmoji">🎤</div>
+    <div class="lb" id="bigLabel">原 唱</div>
+    <div class="hint" id="bigHint">点一下 → 切换伴奏</div>
+  </div>
+
+  <div class="progress">
+    <span class="time" id="tCur">0:00</span>
+    <div class="bar" id="bar">
+      <div class="track"><div class="fill" id="fill" style="width:0"></div>
+        <div class="ab" id="abMark"></div><div class="knob" id="knob" style="left:0"></div></div>
+    </div>
+    <span class="time" id="tDur">0:00</span>
+  </div>
+
+  <div class="controls">
+    <button class="cbtn" id="btnB"><b id="bIcon">B</b>标记</button>
+    <button class="play" id="btnPlay">▶</button>
+    <button class="cbtn" id="btnSpeed"><b id="spdVal">1.0</b>速度</button>
+  </div>
+
+  <div class="slider"><span>伴奏</span><input type="range" id="mixMusic" min="0" max="150" value="100"><span>人声</span><input type="range" id="mixVocal" min="0" max="150" value="100"></div>
+
+  <div class="tools">
+    <div class="chip on" id="chipOrig">🎤 原唱</div>
+    <div class="chip" id="chipInst">🎹 伴奏</div>
+    <div class="chip" id="chipGuide">👥 跟唱</div>
+    <div class="chip" id="chipVocal">🎧 人声</div>
+    <div class="chip" id="chipAB">🔁 A-B</div>
+    <div class="chip" id="chipCount">⏱ 预备</div>
+  </div>
+</div>
+
+<!-- 歌曲列表 -->
+<div class="sheet" id="sheetList">
+  <div class="panel">
+    <h3>歌曲库</h3>
+    <div id="songList" class="songlist"></div>
+    <div class="drop" id="dropZone">＋ 导入新歌 · 只有原唱<br><small>本地 AI 自动分离出伴奏（等 1–3 分钟）</small></div>
+    <div class="drop" id="pairZone" style="margin-top:8px">＋ 导入新歌 · 已有官方伴奏<br><small>原唱 + 伴奏 自动对齐，音质零损失（推荐）</small></div>
+    <input type="file" id="fileInput" accept="audio/*,video/*" style="display:none">
+    <input type="file" id="voiceInput" accept="audio/*,video/*" style="display:none">
+    <input type="file" id="accompInput" accept="audio/*,video/*" style="display:none">
+    <div id="importBox" style="display:none">
+      <div class="pbar"><i id="impBar"></i></div>
+      <div class="log" id="impLog"></div>
+    </div>
+    <div class="row"><button class="btn" id="btnCloseList">关闭</button></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------- 状态 ---------------- */
+const MODES = {
+  orig:  {emoji:'🎤', label:'原 唱', hint:'点一下 → 切换伴奏',   cls:'mode-orig'},
+  inst:  {emoji:'🎹', label:'伴 奏', hint:'点一下 → 切换原唱',   cls:'mode-inst'},
+  guide: {emoji:'👥', label:'跟 唱', hint:'弱原唱 + 伴奏，跟着唱', cls:'mode-guide'},
+  vocal: {emoji:'🎧', label:'人 声', hint:'只听人声，学旋律',     cls:'mode-vocal'}
+};
+const ORDER = {orig:'inst', inst:'orig'};   // 大按钮的切换顺序：原唱 ⇄ 伴奏
+
+/* 是否运行在安卓 App 里（有原生桥） */
+const NATIVE = !!(window.AndroidApp && (()=>{ try{ return AndroidApp.available(); }catch(e){ return false; } })());
+
+let songs = [], cur = null;
+let mode = 'orig';
+let speed = 1, guideLevel = 0.22;
+let abA = null, abB = null, abOn = false;
+let countIn = 0;             // 预备拍秒数
+let raf = 0;
+let pendingVoice = null;
+
+/* ---------------- 音频图 ---------------- */
+const AC = window.AudioContext || window.webkitAudioContext;
+let ac = null, master = null;
+const players = {};          // name -> {el, gain}
+
+function initAudio(){
+  if(ac) return;
+  ac = new AC();
+  master = ac.createGain();
+  master.gain.value = 1;
+  master.connect(ac.destination);
+  for(const k of ['original','instrumental','vocals']){
+    const el = new Audio();
+    el.preload = 'auto';
+    el.crossOrigin = 'anonymous';
+    el.playsInline = true;
+    const g = ac.createGain();
+    g.gain.value = (k === 'original') ? 1 : 0;
+    ac.createMediaElementSource(el).connect(g).connect(master);
+    players[k] = {el, gain:g, target:g.gain.value};
+  }
+}
+
+function setGains(a,b,c,immediate){
+  const t = ac.currentTime, R = immediate ? 0.001 : 0.045;
+  const set = (g,v)=>{ g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value,t);
+                       g.gain.linearRampToValueAtTime(v,t+R); };
+  set(players.original.gain, a);
+  set(players.instrumental.gain, b);
+  if(players.vocals) set(players.vocals.gain, c);
+}
+
+/* mixMusic/mixVocal 是用户滑杆 0-150 */
+function applyMode(imm){
+  const mm = (+$('#mixMusic').value)/100, vv = (+$('#mixVocal').value)/100;
+  if(mode === 'orig')       setGains(1*Math.max(mm,0.001), 0, 0, imm);
+  else if(mode === 'inst')  setGains(0, 1*mm, 0, imm);
+  else if(mode === 'guide') setGains(0, 1*mm, guideLevel*vv, imm);
+  else if(mode === 'vocal') setGains(0, 0, 1*vv, imm);
+  const M = MODES[mode];
+  $('#bigEmoji').textContent = M.emoji;
+  $('#bigLabel').textContent = M.label;
+  $('#bigHint').textContent  = M.hint;
+  $('#bigBtn').className = 'big ' + M.cls;
+  $('#bigBadge').textContent = (mode==='orig'?'1 / 2':'2 / 2');
+  for(const [id,m] of [['#chipOrig','orig'],['#chipInst','inst'],['#chipGuide','guide'],['#chipVocal','vocal']])
+    $(id).classList.toggle('on', mode===m);
+}
+
+/* ---------------- 工具 ---------------- */
+const $ = s => document.querySelector(s);
+const fmt = t => { if(!isFinite(t)||t<0) t=0; const m=Math.floor(t/60), s=Math.floor(t%60);
+                   return m+':'+String(s).padStart(2,'0'); };
+function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show');
+                     clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),1600); }
+
+/* ---------------- 加载歌曲 ---------------- */
+async function loadSong(s, keepPos){
+  initAudio();
+  const pos = keepPos && cur ? players.original.el.currentTime : 0;
+  const wasPlaying = cur && !players.original.el.paused;
+  cur = s;
+  for(const k of ['original','instrumental','vocals']){
+    const fn = (s.files && s.files[k]) || (k + '.m4a');
+    const url = '/media/' + encodeURIComponent(s.id) + '/' + encodeURIComponent(fn);
+    const el = players[k].el;
+    el.src = url;
+    el.playbackRate = speed;
+  }
+  await new Promise(r=>{ const el=players.original.el;
+    if(el.readyState>=1) return r();
+    el.addEventListener('loadedmetadata', r, {once:true}); setTimeout(r,4000); });
+  $('#songTitle').innerHTML = s.name + '<small>' + (s.sub || '') + '</small>';
+  renderList();
+  if(pos>0) seekAll(pos);
+  if(wasPlaying) await playAll();
+  updateTick();
+}
+function seekAll(t){
+  for(const k in players) { try{ players[k].el.currentTime = t; }catch(e){} }
+}
+async function playAll(){
+  initAudio();
+  if(ac.state === 'suspended') await ac.resume();
+  if(countIn > 0){
+    pauseAll();
+    for(let n=countIn; n>0; n--){ toast('预备 '+n); await new Promise(r=>setTimeout(r,1000)); }
+  }
+  for(const k in players){ try{ await players[k].el.play(); }catch(e){} }
+  players.original.el.playbackRate = speed;
+  applyMode(countIn>0);
+}
+function pauseAll(){ for(const k in players) players[k].el.pause(); }
+
+/* ---------------- 播放循环 ---------------- */
+function updateTick(){
+  cancelAnimationFrame(raf);
+  const el = players.original.el;
+  const tick = ()=>{
+    const d = el.duration || cur?.duration || 0;
+    const t = el.currentTime || 0;
+    $('#tCur').textContent = fmt(t);
+    $('#tDur').textContent = fmt(d);
+    const p = d ? (t/d*100) : 0;
+    $('#fill').style.width = p + '%';
+    $('#knob').style.left  = p + '%';
+    // A-B
+    if(abOn && abB!=null && t >= abB){ seekAll(abA); }
+    // 三轨同步纠偏
+    const b = players.instrumental.el.currentTime;
+    if(Math.abs(b - t) > 0.09){ try{ players.instrumental.el.currentTime = t; }catch(e){} }
+    const c = players.vocals.el.currentTime;
+    if(Math.abs(c - t) > 0.09){ try{ players.vocals.el.currentTime = t; }catch(e){} }
+    // AB 标记
+    if(abA!=null && abB!=null && d){ const l=abA/d*100, r=abB/d*100;
+      const m=$('#abMark'); m.style.display='block'; m.style.left=l+'%'; m.style.width=(r-l)+'%'; }
+    else $('#abMark').style.display='none';
+    raf = requestAnimationFrame(tick);
+  };
+  tick();
+}
+
+/* ---------------- 事件 ---------------- */
+$('#bigBtn').onclick = ()=>{
+  if(!cur){ openList(); return; }
+  mode = (mode==='orig'||mode==='inst') ? ORDER[mode] : 'inst';
+  applyMode(false);
+  try{ ac.resume(); }catch(e){}
+};
+$('#btnPlay').onclick = async ()=>{
+  if(!cur){ openList(); return; }
+  initAudio();
+  const el = players.original.el;
+  if(el.paused){ await playAll(); $('#btnPlay').textContent='❚❚'; }
+  else { pauseAll(); $('#btnPlay').textContent='▶'; }
+};
+for(const m of ['Orig','Inst','Guide','Vocal']){
+  $('#chip'+m).onclick = ()=>{ mode = m.toLowerCase();
+    if(mode==='guide'){ /* 弱原唱默认 22% */ }
+    applyMode(false); try{ac.resume();}catch(e){} };
+}
+$('#mixMusic').oninput = ()=>applyMode(true);
+$('#mixVocal').oninput = ()=>applyMode(true);
+
+$('#btnSpeed').onclick = ()=>{
+  const steps=[0.5,0.6,0.7,0.8,0.9,1.0,1.1,1.25];
+  let i=steps.indexOf(speed); i=(i+1)%steps.length; speed=steps[i];
+  for(const k in players) players[k].el.playbackRate = speed;
+  $('#spdVal').textContent = (speed === 1 ? '1.0' : String(speed));
+  toast('速度 ' + speed + 'x');
+};
+$('#btnB').onclick = ()=>{ // A-B 打点
+  const t = players.original.el.currentTime;
+  if(abA==null){ abA=t; abB=null; abOn=false; toast('A 点 '+fmt(t)); }
+  else if(abB==null){ if(t<=abA+1){ toast('B 点要晚于 A 点'); return; } abB=t; abOn=true;
+                      $('#chipAB').classList.add('on'); toast('循环 '+fmt(abA)+' → '+fmt(abB)); }
+  else { abA=null; abB=null; abOn=false; $('#chipAB').classList.remove('on'); toast('已清除 A-B'); }
+};
+$('#chipAB').onclick = ()=>{ abOn = !abOn && abA!=null && abB!=null;
+  $('#chipAB').classList.toggle('on', abOn); if(!abOn){abA=null;abB=null;} };
+$('#chipCount').onclick = ()=>{ const seq=[0,4,8]; let i=seq.indexOf(countIn);
+  i=(i+1)%seq.length; countIn=seq[i];
+  $('#chipCount').classList.toggle('on', countIn>0);
+  $('#chipCount').textContent = countIn? ('⏱ 预备'+countIn+'s') : '⏱ 预备'; };
+
+// 进度条点击
+$('#bar').onclick = e=>{ if(!cur) return;
+  const r = e.currentTarget.getBoundingClientRect();
+  const p = Math.min(1,Math.max(0,(e.clientX-r.left)/r.width));
+  seekAll(p * (players.original.el.duration||0)); updateTick(); };
+
+// 键盘
+addEventListener('keydown', e=>{
+  if(e.target.tagName==='INPUT') return;
+  if(e.code==='Space'){ e.preventDefault(); $('#btnPlay').click(); }
+  if(e.key==='Tab'){ e.preventDefault(); $('#bigBtn').click(); }
+  if(e.key==='a'||e.key==='A'){ $('#btnB').click(); }
+  if(e.key==='ArrowRight'){ seekAll(players.original.el.currentTime+5); }
+  if(e.key==='ArrowLeft'){ seekAll(Math.max(0,players.original.el.currentTime-5)); }
+});
+
+/* ---------------- 歌曲库 ---------------- */
+function openList(){ $('#sheetList').classList.add('open'); refreshSongs(); }
+$('#btnList').onclick = openList;
+$('#btnCloseList').onclick = ()=>$('#sheetList').classList.remove('open');
+$('#sheetList').onclick = e=>{ if(e.target.id==='sheetList') $('#sheetList').classList.remove('open'); };
+
+async function refreshSongs(){
+  const r = await fetch('/api/songs'); songs = await r.json();
+  renderList();
+}
+function renderList(){
+  const box = $('#songList');
+  if(!songs.length){ box.innerHTML = '<div class="empty">歌曲库还是空的<br>用下面的「导入新歌」放一首进来</div>'; return; }
+  box.innerHTML = songs.map(s=>
+    `<div class="songrow ${cur&&cur.id===s.id?'sel':''}" data-id="${s.id}">
+       <div class="nm">${s.name}<small>${(s.sub||'')}</small></div>
+       <div class="del" data-del="${s.id}">✕</div>
+     </div>`).join('');
+  box.querySelectorAll('.songrow').forEach(el=>{
+    el.onclick = async ev=>{
+      if(ev.target.dataset.del) return;
+      const s = songs.find(x=>x.id===el.dataset.id);
+      $('#sheetList').classList.remove('open');
+      await loadSong(s,false); mode='orig'; applyMode(true); updateTick();
+    };
+  });
+  box.querySelectorAll('[data-del]').forEach(el=>{
+    el.onclick = async ev=>{ ev.stopPropagation();
+      if(!confirm('删除《'+ (songs.find(x=>x.id===el.dataset.del)||{}).name +'》？')) return;
+      await fetch('/api/songs/'+encodeURIComponent(el.dataset.del), {method:'DELETE'});
+      if(cur && cur.id===el.dataset.del){ cur=null; pauseAll();
+        $('#songTitle').innerHTML='未选择歌曲<small>点右侧按钮选歌</small>'; }
+      refreshSongs();
+    };
+  });
+}
+
+/* ---------------- 导入 ---------------- */
+$('#dropZone').onclick = ()=>{
+  if(NATIVE){ nativeImport(); return; }
+  $('#fileInput').click();
+};
+$('#pairZone').onclick = ()=>{
+  if(NATIVE){ nativeImport(); return; }
+  $('#voiceInput').click();
+};
+$('#fileInput').onchange = e=>{ if(e.target.files[0]) doImport(e.target.files[0]); };
+$('#voiceInput').onchange = e=>{
+  const f = e.target.files[0]; if(!f) return;
+  pendingVoice = f;
+  toast('已选原唱，接着选伴奏');
+  $('#accompInput').click();
+};
+$('#accompInput').onchange = e=>{
+  const f = e.target.files[0];
+  if(f && pendingVoice) doImportPair(pendingVoice, f);
+};
+['dragenter','dragover'].forEach(t=>$('#dropZone').addEventListener(t,e=>{
+  e.preventDefault(); $('#dropZone').classList.add('hot'); }));
+['dragleave','drop'].forEach(t=>$('#dropZone').addEventListener(t,e=>{
+  e.preventDefault(); $('#dropZone').classList.remove('hot'); }));
+$('#dropZone').addEventListener('drop', e=>{
+  const f = e.dataTransfer.files[0]; if(f) doImport(f); });
+
+async function doImport(file){
+  $('#importBox').style.display='block';
+  const log = $('#impLog'); log.textContent = '准备上传 '+file.name+' …\n';
+  $('#impBar').style.width='0%';
+  const fd = new FormData(); fd.append('file', file, file.name);
+  try{
+    const res = await fetch('/api/import', {method:'POST', body:fd});
+    if(!res.ok) throw new Error(await res.text());
+    const {job} = await res.json();
+    await pollJob(job, log);
+  }catch(err){ log.textContent += '\n✖ 失败: '+err.message; }
+}
+
+/* ---- 电脑端：原唱 + 官方伴奏，自动对齐 ---- */
+async function doImportPair(v, a){
+  $('#importBox').style.display='block';
+  const log = $('#impLog');
+  log.textContent = '原唱：'+v.name+'\n伴奏：'+a.name+'\n上传并自动对齐…\n';
+  $('#impBar').style.width='0%';
+  const fd = new FormData();
+  fd.append('voice', v, v.name);
+  fd.append('accomp', a, a.name);
+  fd.append('name', (v.name||'').replace(/\.[^.]+$/,''));
+  try{
+    const res = await fetch('/api/import_pair', {method:'POST', body:fd});
+    if(!res.ok) throw new Error(await res.text());
+    const {job} = await res.json();
+    await pollJob(job, log);
+  }catch(err){ log.textContent += '\n✖ 失败: '+err.message; }
+}
+
+/* ---- 安卓端：用系统文件选择器导入（先原唱，后伴奏） ---- */
+function pickNative(kind){
+  return new Promise(res=>{
+    let done=false;
+    window.__onPicked = (k, name, err)=>{
+      if(k!==kind || done) return;
+      done = true; window.__onPicked = null;
+      if(err || !name){ toast(err || '已取消'); res(null); }
+      else res(name);
+    };
+    try{ AndroidApp.pickStem(kind); }catch(e){ toast('调用失败'); res(null); }
+    setTimeout(()=>{ if(!done){ done=true; window.__onPicked=null; res(null); } }, 120000);
+  });
+}
+async function nativeImport(){
+  $('#importBox').style.display='block';
+  const log = $('#impLog'); log.textContent='';
+  const put = m=>{ log.textContent += m+'\n'; log.scrollTop=log.scrollHeight; };
+  put('① 选择【原唱】文件……');
+  const o = await pickNative('original');
+  if(!o){ put('已取消'); return; }
+  put('   原唱：'+o);
+  put('② 选择【伴奏】文件……');
+  const i = await pickNative('instrumental');
+  if(!i){ put('已取消'); AndroidApp.cancelImport(); return; }
+  put('   伴奏：'+i);
+  const def = o.replace(/\.[^.]+$/,'');
+  const nm = (prompt('给这首歌起个名字：', def) || def).trim();
+  try{
+    const r = JSON.parse(AndroidApp.commitImport(nm));
+    if(r.ok){ put('✔ 导入完成：'+r.id); await refreshSongs(); }
+    else put('✖ '+r.error);
+  }catch(e){ put('✖ 导入失败：'+e); }
+}
+
+function pollJob(id, log){
+  return new Promise(resolve=>{
+    const es = new EventSource('/api/job/'+id);
+    es.onmessage = ev=>{
+      const m = JSON.parse(ev.data);
+      if(m.log){ log.textContent += m.log + '\n'; log.scrollTop = log.scrollHeight; }
+      if(typeof m.pct === 'number') $('#impBar').style.width = m.pct+'%';
+      if(m.state==='done'){ es.close(); log.textContent += '\n✔ 导入完成'; refreshSongs(); resolve(); }
+      if(m.state==='error'){ es.close(); log.textContent += '\n✖ '+m.error; resolve(); }
+    };
+    es.onerror = ()=>{ es.close(); resolve(); };
+  });
+}
+
+/* ---------------- 启动 ---------------- */
+window.__onBack = function(){
+  const sheet = document.getElementById('sheetList');
+  if(sheet && sheet.classList.contains('open')){ sheet.classList.remove('open'); return true; }
+  return false;
+};
+
+(async function start(){
+  initAudio();
+  if(NATIVE){
+    const dz = $('#dropZone');
+    if(dz) dz.innerHTML = '＋ 导入新歌（依次选择【原唱】和【伴奏】）<br><small>支持 mp3 / m4a / wav / flac 等</small>';
+  }
+  await refreshSongs();
+  if(songs.length){ await loadSong(songs[0], false); }
+  applyMode(true);
+  updateTick();
+  $('#chipOrig').classList.add('on');
+})();
+})();
+</script>
+</body>
+</html>
