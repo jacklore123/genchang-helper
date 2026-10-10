@@ -5,6 +5,7 @@ import imageio_ffmpeg
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from mdx_engine import MDXSeparator, pick_n_fft, auto_params  # noqa: E402
+import subproc  # noqa: E402
 
 FF = imageio_ffmpeg.get_ffmpeg_exe()
 SR = 44100
@@ -19,7 +20,7 @@ def decode(path, sr=SR, start=None, dur=None):
     if dur is not None:
         cmd += ["-t", str(dur)]
     cmd += ["-f", "f32le", tmp]
-    subprocess.run(cmd, check=True)
+    subproc.run(cmd, check=True)          # 不弹黑窗
     a = np.fromfile(tmp, dtype="<f4")
     os.remove(tmp)
     n = (len(a) // 2) * 2
