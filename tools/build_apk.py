@@ -66,6 +66,7 @@ APKWORK = os.path.join(WORK, "apk")
 OUT = common.RELEASE
 APPNAME = "跟唱助手"
 AUDIO_EXT = (".m4a", ".mp3", ".wav", ".flac", ".ogg", ".opus", ".aac")
+SIDE_EXT = (".lrc",)
 
 
 def run(cmd, **kw):
@@ -114,6 +115,9 @@ def sync_assets():
             os.makedirs(dst, exist_ok=True)
             for f in kept:
                 shutil.copy2(os.path.join(d, f), os.path.join(dst, f))
+            for f in os.listdir(d):
+                if f.lower().endswith(SIDE_EXT):
+                    shutil.copy2(os.path.join(d, f), os.path.join(dst, f))
             meta = {}
             mp = os.path.join(d, "song.json")
             if os.path.isfile(mp):
