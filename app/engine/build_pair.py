@@ -122,8 +122,9 @@ def apply_lag(a: np.ndarray, d: int, target_len: int) -> np.ndarray:
 
 
 def encode_m4a(wav: str, out: str, bitrate="256k"):
-    subprocess.run([FF, "-y", "-v", "error", "-i", wav, "-c:a", "aac", "-b:a", bitrate,
-                    "-movflags", "+faststart", out], check=True)
+    import subproc
+    subproc.run([FF, "-y", "-v", "error", "-i", wav, "-c:a", "aac", "-b:a", bitrate,
+                 "-movflags", "+faststart", out], check=True)
 
 
 # --------------------------------------------------------------------------- #
