@@ -68,6 +68,24 @@ def library_dir() -> str:
         return fb
 
 
+def seed_library():
+    """把随包内置的歌曲（如《紫荆花盛开》）铺到歌曲库，让用户开箱即用。"""
+    seed = os.path.join(res_dir(), "seed")
+    if not os.path.isdir(seed):
+        return
+    lib = library_dir()
+    for name in sorted(os.listdir(seed)):
+        src = os.path.join(seed, name)
+        dst = os.path.join(lib, name)
+        if not os.path.isdir(src) or os.path.exists(dst):
+            continue
+        try:
+            shutil.copytree(src, dst)
+            print("  内置歌曲已就位：%s" % name)
+        except Exception as e:
+            print("  内置歌曲复制失败（%s）：%s" % (name, e))
+
+
 def model_path() -> str | None:
     p = os.path.join(MODELS_DIR, DEFAULT_MODEL)
     if os.path.isfile(p):
@@ -138,6 +156,42 @@ class Job:
     def percent(self, p):
         self.pct = float(p)
         self.q.put({"pct": self.pct})
+
+
+def run_lyrics(job: Job, song_id: str, lrc_path: str):
+    """把导入的歌词对齐到这首歌的录音上（自动并轨）。"""
+    try:
+        eng = os.path.join(res_dir(), "engine")
+        if eng not in sys.path:
+            sys.path.insert(0, eng)
+        import align_lyrics  # type: ignore
+
+        pack = os.path.join(library_dir(), song_id)
+        if not os.path.isdir(pack):
+            raise RuntimeError("找不到歌曲目录：%s" % song_id)
+        anchor = align_lyrics.pick_anchor(pack)
+        if not anchor:
+            raise RuntimeError("这首歌还没有音频，无法对齐")
+        job.log("开始对齐歌词：%s" % job.filename)
+        job.percent(10)
+        info = align_lyrics.align(anchor, lrc_path,
+                                  os.path.join(pack, "lyrics.lrc"),
+                                  progress=job.log)
+        job.percent(100)
+        job.log("完成：%d 行，全局偏移 %+.2fs%s"
+                % (info["lines"], info["offset"],
+                   "" if info["timed"] else "（纯文本歌词：已按人声区间吸附起音，建议改用 .lrc 更准）"))
+        job.state = "done"
+    except Exception as e:
+        job.error = str(e)
+        job.state = "error"
+        job.log("✖ " + str(e))
+    finally:
+        job.q.put({"state": job.state, "error": job.error})
+        try:
+            os.remove(lrc_path)
+        except Exception:
+            pass
 
 
 def run_import(job: Job, saved_path: str, display_name: str, accomp_path: str | None = None):
@@ -466,7 +520,7 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
-        if u.path not in ("/api/import", "/api/import_pair"):
+        if u.path not in ("/api/import", "/api/import_pair", "/api/import_lyrics"):
             return self._send(404, b"not found", "text/plain")
 
         tmpdir = tempfile.mkdtemp(prefix="genchang_")
@@ -476,6 +530,22 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(500, str(e).encode(), "text/plain")
 
         jid = "j%d" % int(time.time() * 1000)
+
+        if u.path == "/api/import_lyrics":
+            f = parts.get("file")
+            song_id = self._text_of(parts, "song")
+            if not f:
+                return self._send(400, b"need file", "text/plain")
+            if not song_id:
+                return self._send(400, b"need song", "text/plain")
+            ext = os.path.splitext(f[0])[1] or ".lrc"
+            lp = os.path.join(tmpdir, "lyrics" + ext)
+            os.replace(f[1], lp)
+            job = Job(jid, os.path.basename(f[0]) or "lyrics")
+            with STORE_LOCK:
+                STORE[jid] = job
+            threading.Thread(target=run_lyrics, args=(job, song_id, lp), daemon=True).start()
+            return self._json({"job": jid})
 
         if u.path == "/api/import_pair":
             voice = parts.get("voice")
@@ -565,6 +635,7 @@ def find_browser():
 
 def main(on_ready=None):
     os.makedirs(library_dir(), exist_ok=True)
+    seed_library()
     port = int(os.environ.get("GENCHANG_PORT") or 0) or free_port()
     url = f"http://127.0.0.1:{port}/"
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
