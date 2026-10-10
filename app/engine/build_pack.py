@@ -19,8 +19,9 @@ SR = 44100
 
 
 def encode_m4a(wav, out, bitrate="192k"):
-    subprocess.run([FF, "-y", "-v", "error", "-i", wav, "-c:a", "aac", "-b:a", bitrate,
-                    "-movflags", "+faststart", out], check=True)
+    import subproc
+    subproc.run([FF, "-y", "-v", "error", "-i", wav, "-c:a", "aac", "-b:a", bitrate,
+                 "-movflags", "+faststart", out], check=True)
 
 
 def build(src, outdir, name=None, model=None, progress=print):
