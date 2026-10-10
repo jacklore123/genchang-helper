@@ -112,6 +112,7 @@ def list_songs():
             sub += ("　" if sub else "") + "AI伴奏"
         out.append({"id": name, "name": meta.get("name", name), "sub": sub,
                     "duration": dur, "files": files,
+                    "lyrics": "lyrics.lrc" if os.path.isfile(os.path.join(d, "lyrics.lrc")) else None,
                     "stems": list(files.keys())})
     return out
 
@@ -307,7 +308,10 @@ class Handler(BaseHTTPRequestHandler):
             if not re.fullmatch(r"[A-Za-z0-9_.\-]+", fn):
                 return self._send(400, b"bad name", "text/plain")
             full = os.path.join(library_dir(), song, fn)
-            ctype = "audio/mp4" if fn.endswith(".m4a") else "application/octet-stream"
+            ctype = {"m4a": "audio/mp4", "mp3": "audio/mpeg", "wav": "audio/wav",
+                     "flac": "audio/flac", "ogg": "audio/ogg", "opus": "audio/ogg",
+                     "lrc": "text/plain; charset=utf-8"}.get(
+                fn.rsplit(".", 1)[-1].lower(), "application/octet-stream")
             return self._file(full, ctype)
         # 静态
         if path.startswith("/ui/"):
@@ -533,6 +537,21 @@ BROWSERS = [
     r"%ProgramFiles%\Google\Chrome\Application\chrome.exe",
     r"%ProgramFiles(x86)%\Google\Chrome\Application\chrome.exe",
     r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe",
+    r"%LOCALAPPDATA%\Microsoft\Edge\Application\msedge.exe",
+]
+
+# 让这个窗口就是一个纯粹的"应用"：不联网、不首次运行向导、不后台更新、不同步
+QUIET_FLAGS = [
+    "--no-first-run", "--no-default-browser-check",
+    "--disable-background-networking", "--disable-component-update",
+    "--disable-sync", "--disable-default-apps", "--disable-extensions",
+    "--disable-client-side-phishing-detection", "--disable-domain-reliability",
+    "--no-service-autorun", "--disable-breakpad", "--disable-crash-reporter",
+    "--disable-features=Translate,msEdgeIdentityIntegration,msEdgeSyncPromo,"
+    "EdgeCollections,msEdgeShoppingAssistant,msEdgeFileRecommendation,"
+    "msEdgeSidebarV2,EdgeSplashScreen,msEdgeWelcomePage,OptimizationGuideModelDownloading",
+    "--autoplay-policy=no-user-gesture-required",
+    "--disable-component-extensions-with-background-pages",
 ]
 
 
@@ -544,7 +563,7 @@ def find_browser():
     return None
 
 
-def main():
+def main(on_ready=None):
     os.makedirs(library_dir(), exist_ok=True)
     port = int(os.environ.get("GENCHANG_PORT") or 0) or free_port()
     url = f"http://127.0.0.1:{port}/"
@@ -557,14 +576,23 @@ def main():
     print(f"  歌曲库：{library_dir()}")
     print(f"  分离模型：{model_path() or '未找到（导入功能不可用）'}")
 
+    no_window = os.environ.get("GENCHANG_NO_WINDOW")
     br = find_browser()
-    if br and not os.environ.get("GENCHANG_NO_WINDOW"):
-        prof = os.path.join(os.path.expanduser("~"), ".genchang_browser")
+    if br and not no_window:
+        # 专用配置目录，避免占用用户平时的浏览器会话，也避免首次运行向导
+        prof = os.path.join(os.environ.get("LOCALAPPDATA") or tempfile.gettempdir(),
+                            APP_NAME, "window")
+        try:
+            os.makedirs(prof, exist_ok=True)
+        except Exception:
+            prof = tempfile.mkdtemp(prefix="genchang_")
         args = [br, f"--app={url}", f"--user-data-dir={prof}",
-                "--window-size=460,880", "--no-first-run", "--no-default-browser-check",
-                "--disable-features=Translate,msEdgeIdentityIntegration", "--autoplay-policy=no-user-gesture-required"]
+                "--window-size=460,900", "--window-position=200,60",
+                "--disable-gpu-driver-bug-workarounds"] + QUIET_FLAGS
         print(f"  打开窗口：{os.path.basename(br)}")
         p = subprocess.Popen(args)
+        if on_ready:
+            on_ready()
         try:
             p.wait()
         except KeyboardInterrupt:
@@ -573,12 +601,14 @@ def main():
     else:
         print("  未打开窗口（GENCHANG_NO_WINDOW 或没找到 Edge/Chrome）。")
         print("  请用浏览器打开上面的地址；按 Ctrl+C 退出。")
-        if not os.environ.get("GENCHANG_NO_WINDOW"):
+        if not no_window:
             try:
                 import webbrowser
                 webbrowser.open(url)
             except Exception:
                 pass
+        if on_ready:
+            on_ready()
         try:
             while True:
                 time.sleep(1)
