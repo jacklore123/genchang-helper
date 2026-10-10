@@ -75,6 +75,9 @@ public class Songs {
             if (meta == null) meta = readJsonAsset(c, "songs/" + id + "/song.json");
             if (meta != null) { dur = meta.optDouble("duration", 0); sub = meta.optString("sub", ""); }
             String durs = dur > 0 ? String.format("%d:%02d", (int) (dur / 60), (int) (dur % 60)) : "";
+            String lyr = null;
+            if (new File(d, "lyrics.lrc").isFile()) lyr = "lyrics.lrc";
+            else if (assetExists(c, "songs/" + id + "/lyrics.lrc")) lyr = "lyrics.lrc";
             try {
                 JSONObject o = new JSONObject();
                 o.put("id", id);
@@ -82,6 +85,7 @@ public class Songs {
                 o.put("sub", (durs + (sub.isEmpty() ? "" : "　" + sub)).trim());
                 o.put("duration", dur);
                 o.put("files", files);
+                if (lyr != null) o.put("lyrics", lyr); else o.put("lyrics", JSONObject.NULL);
                 arr.put(o);
             } catch (Exception ignored) {}
         }
