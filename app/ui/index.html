@@ -10,6 +10,8 @@
   --bg:#12131a; --bg2:#1b1d28; --card:#232634; --line:#333747;
   --fg:#f2f4fb; --dim:#9aa2bd; --brand:#ff5c7a; --brand2:#4dd6c1;
   --accent:#7c8cff;
+  /* 歌词字号：教室投影可以直接调到"特大" */
+  --lyrSz: clamp(24px, 6.2vw, 50px);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0}
@@ -60,23 +62,27 @@ body{
         -webkit-mask-image:linear-gradient(180deg,transparent 0,#000 16%,#000 84%,transparent 100%);
         mask-image:linear-gradient(180deg,transparent 0,#000 16%,#000 84%,transparent 100%)}
 .lyrics.on{display:block}
-.lyrInner{position:absolute;left:0;right:0;top:0;transition:transform .38s cubic-bezier(.25,.8,.3,1);
-          will-change:transform}
-.lyr{display:flex;align-items:baseline;gap:9px;padding:8px 4px;font-size:17px;line-height:1.4;
-     color:#59627d;transition:color .2s,font-size .2s;cursor:pointer}
-.lyr .role{flex:0 0 auto;font-size:10px;letter-spacing:.5px;padding:2px 7px;border-radius:999px;
-           background:#262c3d;color:#7d87a3;border:1px solid #333a4f;transform:translateY(-2px)}
+.lyrInner{position:absolute;left:0;right:0;top:0;transition:transform .38s cubic-bezier(.25,.8,.3,1)}
+.lyr{display:flex;align-items:baseline;gap:9px;padding:calc(var(--lyrSz)*0.22) 4px;
+     font-size:calc(var(--lyrSz)*0.62);line-height:1.25;
+     color:#3f4761;transition:color .25s,font-size .25s;cursor:pointer;opacity:.55}
+.lyr .role{flex:0 0 auto;font-size:12px;letter-spacing:.5px;padding:2px 8px;border-radius:999px;
+           background:#262c3d;color:#7d87a3;border:1px solid #333a4f;transform:translateY(-3px)}
 .lyr .txt{position:relative;display:inline-block}
-.lyr .base{color:#59627d}
+.lyr .base{color:#4a5270}
 .lyr .fill{position:absolute;left:0;top:0;white-space:pre;
-           color:#fff;text-shadow:0 0 10px rgba(255,92,122,.85),0 0 22px rgba(124,140,255,.55);
+           color:#fff;text-shadow:0 0 14px rgba(255,92,122,.9),0 0 34px rgba(124,140,255,.6);
            clip-path:inset(0 100% 0 0);pointer-events:none}
-.lyr.cur{font-size:20px;font-weight:700;color:#fff}
-.lyr.cur .base{color:#7b86a8}
-.lyr.done .base{color:#98a2c2}
-.lyr.mark{font-size:12px;color:#4e566d;padding:2px 4px;justify-content:center}
+/* 正在唱的那句：最大、最亮 */
+.lyr.cur{font-size:var(--lyrSz);font-weight:700;opacity:1;color:#fff}
+.lyr.cur .base{color:#6a7498}
+/* 下一句：也放大，方便后排预读 */
+.lyr.next{font-size:calc(var(--lyrSz)*0.86);font-weight:600;opacity:.9}
+.lyr.next .base{color:#7b86a8}
+.lyr.done{opacity:.38}
+.lyr.mark{font-size:12px;color:#4e566d;padding:4px 4px;justify-content:center;opacity:.8}
 .lyr.mark .txt{color:#4e566d}
-.lyrNone{color:var(--dim);font-size:13px;text-align:center;padding:30px 10px}
+.lyrNone{color:var(--dim);font-size:15px;text-align:center;padding:30px 10px}
 .lyrNone .btn{margin:14px auto 0;max-width:260px;display:block}
 .bar{flex:1;height:46px;display:flex;align-items:center;cursor:pointer;position:relative;
      touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;
@@ -214,6 +220,7 @@ input[type=range]::-moz-range-thumb{width:18px;height:18px;border:none;border-ra
     <span class="miniItem" data-m="vocal">只听人声</span>
     <span class="miniItem" id="chipCount">预备拍</span>
     <span class="miniItem" id="chipLyrOff">歌词 +0.0s</span>
+    <span class="miniItem" id="chipSize">字号 大</span>
   </div>
 </div>
 
@@ -270,48 +277,119 @@ const players = {};          // name -> {el, gain}
 
 function initAudio(){
   if(ac) return;
-  ac = new AC();
-  master = ac.createGain();
-  master.gain.value = 1;
-  master.connect(ac.destination);
-  for(const k of ['original','instrumental','vocals']){
-    const el = new Audio();
-    el.preload = 'auto';
-    el.crossOrigin = 'anonymous';
-    el.playsInline = true;
-    const g = ac.createGain();
-    g.gain.value = (k === 'original') ? 1 : 0;
-    ac.createMediaElementSource(el).connect(g).connect(master);
-    players[k] = {el, gain:g, target:g.gain.value};
+  try{
+    ac = new AC();
+    master = ac.createGain();
+    master.gain.value = 1;
+    master.connect(ac.destination);
+    for(const k of ['original','instrumental','vocals']){
+      const el = new Audio();
+      el.preload = 'auto';
+      el.crossOrigin = 'anonymous';
+      el.playsInline = true;
+      const g = ac.createGain();
+      g.gain.value = (k === 'original') ? 1 : 0;
+      ac.createMediaElementSource(el).connect(g).connect(master);
+      el.addEventListener('error', function(){
+        const e = el.error;
+        toast('音轨加载失败（' + k + '）：' + (e ? e.code : '?') + '，可试试重新导入');
+      });
+      players[k] = {el, gain:g};
+    }
+  }catch(e){
+    // 初始化中途失败时不要把半成品留下（否则后续调用会被 if(ac) 挡住）
+    try{ if(ac && ac.close) ac.close(); }catch(e2){}
+    ac = null; master = null;
+    for(const k in players) delete players[k];
+    toast('音频初始化失败，请刷新页面');
   }
 }
 
 function setGains(a,b,c,immediate){
-  const t = ac.currentTime, R = immediate ? 0.001 : 0.045;
-  const set = (g,v)=>{ g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(g.gain.value,t);
-                       g.gain.linearRampToValueAtTime(v,t+R); };
-  set(players.original.gain, a);
-  set(players.instrumental.gain, b);
-  if(players.vocals) set(players.vocals.gain, c);
+  if(!ac) return;
+  const t = ac.currentTime, R = immediate ? 0.006 : 0.020;
+  const targets = [[players.original.gain, a], [players.instrumental.gain, b]];
+  if(players.vocals) targets.push([players.vocals.gain, c]);
+  for(let i = 0; i < targets.length; i++){
+    const g = targets[i][0], v = targets[i][1];
+    if(!isFinite(v)) continue;                    // 防 NaN：一旦 ramp 到 NaN，这条轨会永久静音
+    try{
+      g.gain.cancelScheduledValues(t);
+      g.gain.setValueAtTime(g.gain.value, t);
+      g.gain.linearRampToValueAtTime(v, t + R);
+    }catch(e){
+      try{ g.gain.value = v; }catch(e2){}
+    }
+    // 保险：音频时钟被挂起（比如页面刚加载还没用户手势）时斜坡不会跑完，
+    // 这里兜一次底，避免"切到伴奏却没声音"。
+    (function(gg, vv){
+      setTimeout(function(){
+        try{
+          if(Math.abs(gg.gain.value - vv) > 0.03){
+            gg.gain.cancelScheduledValues(ac.currentTime);
+            gg.gain.setValueAtTime(vv, ac.currentTime);
+          }
+        }catch(e){}
+      }, R * 1000 + 140);
+    })(g, v);
+  }
+}
+
+/* 各模式需要哪几轨出声 */
+function tracksFor(m){
+  if(m === 'orig')  return {original:1, instrumental:0, vocals:0};
+  if(m === 'inst')  return {original:0, instrumental:1, vocals:0};
+  if(m === 'guide') return {original:0, instrumental:1, vocals:1};
+  if(m === 'vocal') return {original:0, instrumental:0, vocals:1};
+  return {original:1, instrumental:0, vocals:0};
 }
 
 /* mixMusic/mixVocal 是用户滑杆 0-150 */
 function applyMode(imm){
+  if(!ac) return;
   const mm = (+$('#mixMusic').value)/100, vv = (+$('#mixVocal').value)/100;
-  if(mode === 'orig')       setGains(1*Math.max(mm,0.001), 0, 0, imm);
-  else if(mode === 'inst')  setGains(0, 1*mm, 0, imm);
-  else if(mode === 'guide') setGains(0, 1*mm, guideLevel*vv, imm);
-  else if(mode === 'vocal') setGains(0, 0, 1*vv, imm);
+  const w = tracksFor(mode);
+  setGains(w.original * Math.max(mm, 0.001) * (w.original ? 1 : 0),
+           w.instrumental * mm,
+           w.vocals * (mode === 'guide' ? guideLevel : 1) * vv,
+           imm);
   // 顶栏胶囊：只有原唱/伴奏是高亮的主状态
   document.querySelectorAll('#segMode .segItem').forEach(function(el){
     el.classList.toggle('on', el.dataset.m === mode);
   });
   $('#segMode').classList.toggle('g', mode === 'inst');
-  // 底部次级项
   document.querySelectorAll('#miniModes .miniItem[data-m]').forEach(function(el){
     el.classList.toggle('on', el.dataset.m === mode);
   });
-  if(typeof setBigTitle === 'function') setBigTitle();
+  setBigTitle();
+}
+
+/* 切轨前先把目标轨救活并对齐，避免"切过去没声音" */
+function repairTrack(k){
+  const el = players[k] && players[k].el;
+  const m = players.original.el;
+  if(!el) return;
+  try{
+    if(m.paused) return;                       // 没在播就不用救
+    if(el.readyState < 2) return;              // 还没加载好，交给 syncLoop
+    if(el.seeking) return;
+    if(Math.abs(el.currentTime - m.currentTime) > 0.20){
+      el.currentTime = m.currentTime;
+    }
+    if(el.paused){ const p = el.play(); if(p && p.catch) p.catch(function(){}); }
+  }catch(e){}
+}
+
+function setMode(m){
+  if(mode === m){ return; }
+  mode = m;
+  if(!ac){ applyMode(true); return; }
+  const w = tracksFor(m);
+  ['original','instrumental','vocals'].forEach(function(k){
+    if(w[k] > 0) repairTrack(k);
+  });
+  applyMode(false);
+  try{ ac.resume(); }catch(e){}
 }
 
 function setBigTitle(){
@@ -354,20 +432,74 @@ async function loadSong(s, keepPos){
   updateTick();
 }
 function seekAll(t){
-  for(const k in players) { try{ players[k].el.currentTime = t; }catch(e){} }
+  for(const k in players){
+    const el = players[k].el;
+    if(el.readyState < 1) continue;          // 还没元数据，设了也没用，还可能抛异常
+    try{ el.currentTime = t; }catch(e){}
+  }
 }
+
+/* 播放：三轨同时起播
+   注意不能用「逐个 await el.play()」——只要有一轨的 promise 不落地，
+   整个函数就卡在那里，表现就是"点了没反应/卡住"。改成一起发、限时等。 */
 async function playAll(){
   initAudio();
-  if(ac.state === 'suspended') await ac.resume();
+  if(!ac) return;
+  if(ac.state === 'suspended'){ try{ await ac.resume(); }catch(e){} }
   if(countIn > 0){
     pauseAll();
     for(let n=countIn; n>0; n--){ toast('预备 '+n); await new Promise(r=>setTimeout(r,1000)); }
   }
-  for(const k in players){ try{ await players[k].el.play(); }catch(e){} }
+  const t0 = players.original.el.currentTime || 0;
+  const waits = [];
+  for(const k in players){
+    const el = players[k].el;
+    try{
+      if(el.readyState >= 1 && Math.abs(el.currentTime - t0) > 0.05) el.currentTime = t0;
+    }catch(e){}
+    try{
+      const p = el.play();
+      if(p && p.catch) waits.push(p.catch(function(){}));
+    }catch(e){}
+  }
+  // 最多等 1.2 秒，剩下的交给 syncLoop 兜底
+  await Promise.race([
+    Promise.all(waits),
+    new Promise(function(r){ setTimeout(r, 1200); })
+  ]);
   players.original.el.playbackRate = speed;
-  applyMode(countIn>0);
+  applyMode(countIn > 0);
 }
-function pauseAll(){ for(const k in players) players[k].el.pause(); }
+function pauseAll(){
+  for(const k in players){ try{ players[k].el.pause(); }catch(e){} }
+}
+
+/* 独立的三轨同步守卫：带冷却，绝不在 seek 中反复 seek
+   （之前放在渲染循环里每帧纠偏，一旦某轨掉队就被无限 seek，声音永远出不来） */
+const syncCool = {};
+function syncTracks(){
+  const m = players.original && players.original.el;
+  if(!m || m.paused) return;
+  const t = m.currentTime;
+  if(!t) return;
+  const now = (window.performance && performance.now) ? performance.now() : Date.now();
+  for(const k in players){
+    if(k === 'original') continue;
+    const el = players[k].el;
+    if(el.readyState < 2 || el.seeking) continue;
+    if(el.paused){
+      // 主轨在播、它却停了 —— 拉起来
+      try{ const p = el.play(); if(p && p.catch) p.catch(function(){}); }catch(e){}
+      continue;
+    }
+    const last = syncCool[k] || 0;
+    if(Math.abs(el.currentTime - t) > 0.12 && now - last > 1500){
+      syncCool[k] = now;
+      try{ el.currentTime = t; }catch(e){}
+    }
+  }
+}
+setInterval(syncTracks, 300);
 
 /* ---------------- 播放循环 ---------------- */
 function updateTick(){
@@ -385,11 +517,7 @@ function updateTick(){
     }
     // A-B
     if(abOn && abB!=null && t >= abB){ seekAll(abA); }
-    // 三轨同步纠偏
-    const b = players.instrumental.el.currentTime;
-    if(Math.abs(b - t) > 0.09){ try{ players.instrumental.el.currentTime = t; }catch(e){} }
-    const c = players.vocals.el.currentTime;
-    if(Math.abs(c - t) > 0.09){ try{ players.vocals.el.currentTime = t; }catch(e){} }
+    // 三轨同步交给独立的 syncTracks()（带冷却，避免每帧 seek 把声音卡死）
     // AB 标记
     if(abA!=null && abB!=null && d){ const l=abA/d*100, r=abB/d*100;
       const m=$('#abMark'); m.style.display='block'; m.style.left=l+'%'; m.style.width=(r-l)+'%'; }
@@ -404,8 +532,12 @@ function updateTick(){
 let lyrics = [];            // [{t, text, role, mark}]
 let lineEls = [];           // 对应 DOM
 let curLine = -1;
+let nextLine = -1;
 let lyrOn = false;
 let lyrOff = 0;             // 手动微调（秒）
+let lyrSize = 1;            // 0 标准 / 1 大 / 2 特大
+const LYR_SIZES = ['clamp(18px,4.4vw,32px)', 'clamp(24px,6.2vw,50px)', 'clamp(30px,8.4vw,76px)'];
+const LYR_NAMES = ['标准', '大', '特大'];
 const OFF_STEPS = [0, 0.2, 0.4, 0.6, 0.8, -0.2, -0.4, -0.6, -0.8];
 let offIdx = 0;
 
@@ -495,12 +627,23 @@ function updateLyrics(t, force){
     const f = lineEls[idx].querySelector('.fill');
     if(f) f.style.clipPath = 'inset(0 ' + ((1 - p) * 100).toFixed(1) + '% 0 0)';
   }
+  // 下一句也放大（教室后排要能预读）
+  if(idx !== nextLine || force){
+    let nxt = -1;
+    for(let j = idx + 1; j < lyrics.length; j++){
+      if(!lyrics[j].mark){ nxt = j; break; }
+    }
+    if(nextLine >= 0 && lineEls[nextLine]) lineEls[nextLine].classList.remove('next');
+    nextLine = nxt;
+    if(nxt >= 0 && lineEls[nxt]) lineEls[nxt].classList.add('next');
+  }
 }
 
 function layoutLyrics(){
   const box = $('#lyricsBox'), inner = $('#lyrInner');
   if(!box || !inner) return;
-  const h = box.clientHeight || 1;
+  const h = box.clientHeight;
+  if(!h) return;                                    // 面板还没显示出来，先不量
   inner.style.paddingTop = Math.round(h * 0.42) + 'px';
   inner.style.paddingBottom = Math.round(h * 0.58) + 'px';
 }
@@ -522,6 +665,28 @@ function setLyricsVisible(){
   }, 60);
 }
 
+function setLyrSize(i, silent){
+  lyrSize = ((i % LYR_SIZES.length) + LYR_SIZES.length) % LYR_SIZES.length;
+  document.documentElement.style.setProperty('--lyrSz', LYR_SIZES[lyrSize]);
+  const el = $('#chipSize');
+  if(el){
+    el.textContent = '字号 ' + LYR_NAMES[lyrSize];
+    el.classList.toggle('on', lyrSize > 0);
+  }
+  try{ localStorage.setItem('genchang.lyrsize', String(lyrSize)); }catch(e){}
+  layoutLyrics();
+  if(curLine >= 0) scrollLyrics(curLine);
+  if(!silent) toast('歌词字号：' + LYR_NAMES[lyrSize]);
+}
+function initLyrSize(){
+  let i = 1;
+  try{
+    const v = localStorage.getItem('genchang.lyrsize');
+    if(v !== null && v !== '') i = parseInt(v, 10) || 0;
+  }catch(e){}
+  setLyrSize(i, true);
+}
+
 async function loadLyrics(song){
   lyrics = []; lineEls = []; curLine = -1;
   lyrOff = 0; offIdx = 0;
@@ -534,6 +699,12 @@ async function loadLyrics(song){
   }
   renderLyrics();
   $('#lyricsBox').classList.add('on');
+  // 面板这时才真正显示出来，上下留白要重新量一次（否则首句会贴在顶上）
+  requestAnimationFrame(function(){
+    layoutLyrics();
+    if(curLine >= 0) scrollLyrics(curLine);
+    updateLyrics(players.original.el.currentTime || 0, true);
+  });
 }
 
 /* ---------------- 歌词导入（自动并轨） ---------------- */
@@ -584,9 +755,7 @@ $('#segMode').onclick = function(e){
   const m = e.target && e.target.dataset ? e.target.dataset.m : null;
   if(!m) return;
   if(!cur){ openList(); return; }
-  mode = m;
-  applyMode(false);
-  try{ ac.resume(); }catch(err){}
+  setMode(m);
 };
 $('#btnPlay').onclick = async ()=>{
   if(!cur){ openList(); return; }
@@ -599,9 +768,7 @@ $('#btnPlay').onclick = async ()=>{
 document.querySelectorAll('#miniModes .miniItem[data-m]').forEach(function(el){
   el.onclick = function(){
     if(!cur){ openList(); return; }
-    mode = (mode === el.dataset.m) ? 'orig' : el.dataset.m;
-    applyMode(false);
-    try{ ac.resume(); }catch(err){}
+    setMode(mode === el.dataset.m ? 'orig' : el.dataset.m);
   };
 });
 $('#mixMusic').oninput = ()=>applyMode(true);
@@ -623,6 +790,7 @@ $('#btnB').onclick = ()=>{ // A-B 打点
 };
 $('#chipAB').onclick = ()=>{ abOn = !abOn && abA!=null && abB!=null;
   $('#chipAB').classList.toggle('on', abOn); if(!abOn){abA=null;abB=null;} };
+$('#chipSize').onclick = function(){ setLyrSize(lyrSize + 1); };
 $('#chipResetAB').onclick = ()=>{ abA=null; abB=null; abOn=false;
   $('#chipAB').classList.remove('on'); $('#abMark').style.display='none'; toast('已清除 A-B'); };
 $('#chipCount').onclick = ()=>{ const seq=[0,4,8]; let i=seq.indexOf(countIn);
@@ -716,11 +884,13 @@ addEventListener('keydown', e=>{
   if(e.target.tagName==='INPUT') return;
   if(e.code==='Space'){ e.preventDefault(); $('#btnPlay').click(); }
   if(e.key==='Tab'){ e.preventDefault();
-    if(cur){ mode = (mode==='orig') ? 'inst' : 'orig'; applyMode(false); try{ac.resume();}catch(err){} } }
+    if(cur){ setMode(mode === 'orig' ? 'inst' : 'orig'); } }
   if(e.key==='a'||e.key==='A'){ $('#btnB').click(); }
   if(e.key==='ArrowRight'){ seekAll(players.original.el.currentTime+5); }
   if(e.key==='ArrowLeft'){ seekAll(Math.max(0,players.original.el.currentTime-5)); }
   if(e.key==='l'||e.key==='L'){ toast(lyrics.length ? '本版歌词常显，用「歌词 +0.0s」微调对齐' : '这首歌还没有歌词，可在 ☰ 里导入'); }
+  if(e.key==='='||e.key==='+'){ setLyrSize(lyrSize + 1); }
+  if(e.key==='-'||e.key==='_'){ setLyrSize(lyrSize - 1); }
 });
 
 /* ---------------- 歌曲库 ---------------- */
@@ -948,6 +1118,89 @@ if(/[?&]probe=top/.test(location.search)){
   }, 3000);
 }
 
+/* __LYRPROBE__ 歌词高亮自检（?probe=lyr&t=52）：不破坏界面，只在角上叠加信息 */
+if(/[?&]probe=lyr/.test(location.search)){
+  // headless 的虚拟时间会冻住 CSS transition，先关掉再看真实排版
+  var st = document.createElement('style');
+  st.textContent = '.lyrInner{transition:none !important}';
+  document.head.appendChild(st);
+  setTimeout(function(){
+    document.querySelectorAll('.lyrInner').forEach(function(e){ e.style.transition = 'none'; });
+    var el = players.original.el;
+    var cur = document.querySelector('.lyr.cur');
+    var nxt = document.querySelector('.lyr.next');
+    var inner = document.getElementById('lyrInner');
+    var box = document.getElementById('lyricsBox');
+    var d = document.createElement('div');
+    d.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:999;background:#000c;'
+      + 'color:#7fe;font:12px/1.7 monospace;padding:8px 10px;border-radius:8px;white-space:pre';
+    d.textContent = 't=' + el.currentTime.toFixed(2) + 's  readyState=' + el.readyState
+      + '\n行数=' + lyrics.length + '  curLine=' + curLine + '  next=' + nextLine
+      + '\n当前句: ' + (cur ? cur.textContent.trim().slice(0, 16) : '(无)')
+      + '\n下一句: ' + (nxt ? nxt.textContent.trim().slice(0, 16) : '(无)')
+      + '\npaddingTop=' + inner.style.paddingTop + '  translateY=' + inner.style.transform
+      + '\n字号=' + getComputedStyle(document.documentElement).getPropertyValue('--lyrSz');
+    document.body.appendChild(d);
+  }, 7000);
+}
+
+/* __AUDIOPROBE__ 切轨逻辑自检（?probe=audio）
+   headless 没有声卡，AudioContext 时钟不走，所以这里不测声音，
+   而是拦截 setGains，验证"每种模式算出来的增益对不对"。 */
+if(/[?&]probe=audio/.test(location.search)){
+  (function(){
+    var rec = [];
+    var _sg = setGains;
+    setGains = function(a,b,c,i){
+      rec.push({m:mode, a:a, b:b, c:c, imm:!!i,
+                mm:$('#mixMusic').value, vv:$('#mixVocal').value});
+      return _sg(a,b,c,i);
+    };
+    setTimeout(function(){
+      function hit(m){
+        var el = document.querySelector('#segMode .segItem[data-m="' + m + '"]')
+              || document.querySelector('#miniModes .miniItem[data-m="' + m + '"]');
+        if(!el){ rec.push({err:'找不到 ' + m}); return; }
+        el.click();
+      }
+      function repairInfo(m){
+        var w = tracksFor(m), out = [];
+        for(var k in w){
+          if(w[k] <= 0) continue;
+          var el = players[k].el, mr = players.original.el;
+          out.push(k + '(rs=' + el.readyState + ' paused=' + el.paused
+                   + ' Δt=' + (el.currentTime - mr.currentTime).toFixed(2) + ')');
+        }
+        return out.join(' ');
+      }
+      var seq = ['inst','guide','vocal','orig','inst'];
+      rec.push({note:'起始 mode=' + mode});
+      seq.forEach(function(m){
+        hit(m);
+        rec.push({note:'点「' + m + '」后 mode=' + mode + '  目标轨: ' + repairInfo(m)});
+      });
+
+      var lines = rec.map(function(r){
+        if(r.err) return '✖ ' + r.err;
+        if(r.note) return r.note;
+        var ok = '';
+        var exp = tracksFor(r.m);
+        var good = (r.a === exp.original * 1 && r.b === exp.instrumental * 1 && r.c >= 0);
+        return '  setGains(' + r.a.toFixed(3) + ', ' + r.b.toFixed(3) + ', '
+             + r.c.toFixed(3) + ')' + (r.imm ? ' [immediate]' : '')
+             + '  ← mode=' + r.m + '  mixMusic=' + r.mm + ' mixVocal=' + r.vv;
+      });
+      var d = document.createElement('div');
+      d.style.cssText = 'position:fixed;left:0;top:0;right:0;bottom:0;z-index:99999;'
+        + 'background:#000f;color:#9fe;font:12.5px/1.6 monospace;padding:12px;'
+        + 'white-space:pre-wrap;overflow:auto';
+      d.textContent = '【切轨逻辑自检】\n\n' + lines.join('\n')
+        + '\n\n期望：inst → (0, 1, 0)   guide → (0, 1, 0.22)   vocal → (0, 0, 1)   orig → (1, 0, 0)';
+      document.body.appendChild(d);
+    }, 5000);
+  })();
+}
+
 window.__onBack = function(){
   const sheet = document.getElementById('sheetList');
   if(sheet && sheet.classList.contains('open')){ sheet.classList.remove('open'); return true; }
@@ -956,6 +1209,7 @@ window.__onBack = function(){
 
 (async function start(){
   initAudio();
+  initLyrSize();
   if(NATIVE){
     const dz = $('#dropZone');
     if(dz) dz.innerHTML = '＋ 导入新歌（依次选择【原唱】和【伴奏】）<br><small>支持 mp3 / m4a / wav / flac 等</small>';
