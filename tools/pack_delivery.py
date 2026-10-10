@@ -137,6 +137,40 @@ README = """╔═════════════════════�
 """
 
 
+def export_accompaniments(dst):
+    """把内置歌曲的伴奏导出一份通用 MP3 —— 方便拷到 U 盘拿去舞台/音响播放。"""
+    import subprocess
+    import imageio_ffmpeg
+    lib = common.LIBRARY
+    if not os.path.isdir(lib):
+        return 0
+    ff = imageio_ffmpeg.get_ffmpeg_exe()
+    made = 0
+    for name in sorted(os.listdir(lib)):
+        d = os.path.join(lib, name)
+        if not os.path.isdir(d) or name.startswith("_"):
+            continue
+        src = None
+        for cand in ("instrumental.m4a", "instrumental.mp3", "instrumental.wav"):
+            if os.path.isfile(os.path.join(d, cand)):
+                src = os.path.join(d, cand)
+                break
+        if not src:
+            continue
+        out = os.path.join(dst, "%s-伴奏.mp3" % name)
+        try:
+            subprocess.run([ff, "-y", "-v", "error", "-i", src,
+                            "-c:a", "libmp3lame", "-b:a", "320k",
+                            "-metadata", "title=%s (伴奏)" % name,
+                            "-metadata", "artist=跟唱助手", out],
+                           check=True, creationflags=0x08000000)
+            print("  %-30s %6.1f MB" % (os.path.basename(out), os.path.getsize(out) / 1e6))
+            made += 1
+        except Exception as e:
+            print("  [!] 伴奏导出失败 %s: %s" % (name, e))
+    return made
+
+
 def main():
     dst = os.environ.get("GENCHANG_DELIVERY") or \
         (sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(common.ROOT),
@@ -185,6 +219,8 @@ def main():
     with open(os.path.join(dst, "使用说明.txt"), "w", encoding="utf-8") as f:
         f.write(README)
     print("  使用说明.txt")
+    print("  导出舞台用伴奏…")
+    export_accompaniments(dst)
     print("\n交付目录: %s   （%d 个程序）" % (dst, ok))
     for f in sorted(os.listdir(dst)):
         p = os.path.join(dst, f)
