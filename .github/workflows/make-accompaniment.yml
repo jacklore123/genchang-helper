@@ -1,0 +1,94 @@
+name: 生成跟唱包
+
+# 把一首歌变成「原唱 + 伴奏」的跟唱包。
+# 触发方式：
+#   1) 手动 Run workflow，填歌曲直链
+#   2) 把歌曲 push 到 songs/<歌名>/ 下
+on:
+  workflow_dispatch:
+    inputs:
+      song_url:
+        description: '歌曲直链（音频或视频；留空则处理 songs/ 目录里已有的文件）'
+        required: false
+        default: ''
+      song_name:
+        description: '歌曲名（留空则用文件名）'
+        required: false
+        default: ''
+      mode:
+        description: 'separate = 只有原唱，AI 分伴奏；pair = 原唱+伴奏，自动对齐'
+        required: true
+        default: separate
+        type: choice
+        options: [separate, pair]
+      accompaniment_url:
+        description: '（pair 模式）伴奏直链'
+        required: false
+        default: ''
+  push:
+    paths:
+      - 'songs/**'
+
+jobs:
+  make-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install numpy onnxruntime soundfile imageio-ffmpeg
+
+      - name: 拉取分离模型
+        run: python tools/fetch_model.py
+
+      - name: 取回歌曲文件
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.song_url != '' }}
+        env:
+          SONG_URL: ${{ inputs.song_url }}
+          SONG_NAME: ${{ inputs.song_name }}
+          MODE: ${{ inputs.mode }}
+          ACC_URL: ${{ inputs.accompaniment_url }}
+        run: |
+          set -e
+          NAME="${SONG_NAME:-song}"
+          DIR="songs/${NAME}"
+          mkdir -p "$DIR"
+          echo "下载原唱…"
+          curl -fL --retry 3 -o "$DIR/voice.bin" "$SONG_URL"
+          if [ "$MODE" = "pair" ] && [ -n "$ACC_URL" ]; then
+            echo "下载伴奏…"
+            curl -fL --retry 3 -o "$DIR/accomp.bin" "$ACC_URL"
+          fi
+          ls -la "$DIR"
+
+      - name: 批量生成跟唱包
+        run: python tools/make_pack.py --scan
+
+      - name: 汇总产物
+        run: |
+          echo "## 生成的跟唱包" >> $GITHUB_STEP_SUMMARY
+          if [ -d library ]; then
+            for d in library/*/; do
+              [ -d "$d" ] || continue
+              echo "- **$(basename "$d")**" >> $GITHUB_STEP_SUMMARY
+              ls -la "$d" >> $GITHUB_STEP_SUMMARY
+            done
+          else
+            echo "没有产出" >> $GITHUB_STEP_SUMMARY
+          fi
+          du -sh library 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: genchang-pack
+          path: library/
+          if-no-files-found: warn
+          retention-days: 30
