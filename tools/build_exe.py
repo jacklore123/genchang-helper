@@ -38,6 +38,8 @@ def main():
         "--noconfirm", "--clean", mode,
         "--name", NAME,
         "--icon", os.path.join(common.UI, "app.ico"),
+        # 不弹黑色控制台窗口
+        "--noconsole",
         "--add-data", "%s;ui" % common.UI,
         "--add-data", "%s;models" % common.MODELS,
         "--add-data", "%s;engine" % common.ENGINE,
@@ -48,13 +50,15 @@ def main():
         "--hidden-import", "numpy",
         "--hidden-import", "soundfile",
         "--hidden-import", "imageio_ffmpeg",
+        "--hidden-import", "tkinter",
+        "--hidden-import", "tkinter.messagebox",
         "--collect-submodules", "soundfile",
         "--distpath", common.DIST,
         "--workpath", common.BUILD,
         "--specpath", common.BUILD,
     ]
     for m in ("torch", "torchaudio", "matplotlib", "librosa", "scipy", "pandas",
-              "tkinter", "PyQt5", "PySide2", "IPython", "pytest", "PIL",
+              "PyQt5", "PySide2", "IPython", "pytest", "PIL",
               "faster_whisper", "ctranslate2", "av", "numpy.f2py"):
         args += ["--exclude-module", m]
     args.append(os.path.join(common.APP, "entry.py"))
