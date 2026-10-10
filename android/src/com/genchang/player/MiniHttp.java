@@ -252,6 +252,7 @@ public class MiniHttp {
         if (n.endsWith(".js")) return "application/javascript; charset=utf-8";
         if (n.endsWith(".css")) return "text/css; charset=utf-8";
         if (n.endsWith(".json")) return "application/json; charset=utf-8";
+        if (n.endsWith(".lrc") || n.endsWith(".txt")) return "text/plain; charset=utf-8";
         if (n.endsWith(".png")) return "image/png";
         if (n.endsWith(".svg")) return "image/svg+xml";
         return "application/octet-stream";
