@@ -23,31 +23,35 @@ README = """╔═════════════════════�
 ║        一边原唱，一个大按钮，一键切成伴奏                   ║
 ╚══════════════════════════════════════════════════════════╝
 
-这个文件夹里只有 3 个程序，别的什么都不用管：
+这个文件夹里只有 4 样东西：
 
   ① 跟唱助手.exe     ← 电脑上双击这个（已内置《紫荆花盛开》）
   ② 跟唱助手.apk     ← 传到学生手机，点一下安装
   ③ 伴奏分离器.exe   ← 想加新歌时用：把 MP3/MP4 拖到它上面
+  ④ 合唱歌词小纸条（打印用）.docx  ← 一页 A4 六张，剪开给同学
 
 ──────────────────────────────────────────────────────────
 ① 跟唱助手（电脑 / 手机）
 
-  打开就能用，界面中间一个大按钮：
+  打开就能用。界面很干净，中间是跟着进度逐字变色的歌词，
+  右下角一条控制栏：
 
-      🎤 原唱   ←→   🎹 伴奏        点一下切换，播放进度不跳
+      [原唱 | 伴奏]     ← 点一下切换，播放进度不跳
+      A·B               ← 反复练某一句（播到开头按一下，到结尾再按一下）
+      ▶ / ❚❚            ← 播放 / 暂停
+      1.0×              ← 速度，0.5×～1.25×，不跑调
 
-  另外还有：
+  下面一行灰字：
       跟唱       弱原唱 + 伴奏，跟着唱
-      人声       只听人声，学旋律
-      A-B        反复练某一句：播到开头按一下，到结尾再按一下
-      预备       按播放先数 4 秒 / 8 秒，给起唱做准备
-      速度       0.5×～1.25×，不跑调
-      歌词       屏幕上的 KTV 歌词，跟着进度逐字变色
-                 点任意一句 = 直接跳到那句
-                 ↕ 按钮可以整体微调歌词对齐
+      只听人声   只听人声，学旋律
+      预备拍     按播放先数 4 / 8 秒
+      歌词 +0.0s 整体微调歌词对齐（±0.2 秒一档）
 
-  键盘：空格 = 播放/暂停    Tab = 切换原唱/伴奏    L = 开关歌词
-        A = 打 A-B 点      ←/→ = 快退快进 5 秒
+  歌词上点任意一句 = 直接跳到那句。
+  右上角 ☰ 里有：混音滑杆、A-B 清除、歌曲库、导入新歌、导入歌词。
+
+  键盘：空格 = 播放/暂停    Tab = 切换原唱/伴奏
+        A = 打 A-B 点       ←/→ = 快退快进 5 秒
 
   手机和电脑操作完全一样。
 
@@ -74,7 +78,6 @@ README = """╔═════════════════════�
   会在歌曲旁边生成：
       <歌名>-伴奏.m4a
       <歌名>-人声.m4a
-      <歌名>-原唱.m4a
 
   不上传、不联网，全部在本地算。
 
@@ -133,18 +136,39 @@ def main():
     items = [(os.path.join(common.DIST, APP + ".exe"), APP + ".exe"),
              (os.path.join(common.RELEASE, APP + ".apk"), APP + ".apk"),
              (os.path.join(common.DIST, SEP + ".exe"), SEP + ".exe")]
+    # 歌词小纸条（打印用）
+    docx = os.environ.get("GENCHANG_LYRICS_DOCX") or \
+        os.path.join(os.path.dirname(common.ROOT),
+                     "紫荆花盛开-合唱歌词小纸条(6张·一页A4)-已同步时间.docx")
+    if os.path.isfile(docx):
+        items.append((docx, "合唱歌词小纸条（打印用）.docx"))
+    else:
+        print("  [!] 没找到歌词小纸条：%s" % docx)
     # 兼容目录版
     for src, name in ((os.path.join(common.DIST, APP), None),
                       (os.path.join(common.DIST, SEP), None)):
         if name is None and os.path.isdir(src):
             print("提示：%s 是目录版，跳过（用 --onedir 打包时才会有）" % os.path.basename(src))
 
+    def copy_retry(src, dst, tries=8):
+        import time
+        last = None
+        for i in range(tries):
+            try:
+                shutil.copy2(src, dst)
+                return True
+            except PermissionError as e:      # 常被杀软/资源管理器短暂占用
+                last = e
+                time.sleep(1.2)
+        print("  [!] 复制失败 %s：%s" % (os.path.basename(src), last))
+        return False
+
     ok = 0
     for src, name in items:
         if os.path.isfile(src):
-            shutil.copy2(src, os.path.join(dst, name))
-            print("  %-24s %6.1f MB" % (name, os.path.getsize(src) / 1e6))
-            ok += 1
+            if copy_retry(src, os.path.join(dst, name)):
+                print("  %-24s %6.1f MB" % (name, os.path.getsize(src) / 1e6))
+                ok += 1
         else:
             print("  [!] 缺 %s（%s）" % (name, src))
 
