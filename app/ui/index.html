@@ -292,7 +292,11 @@ function initAudio(){
       ac.createMediaElementSource(el).connect(g).connect(master);
       el.addEventListener('error', function(){
         const e = el.error;
-        toast('音轨加载失败（' + k + '）：' + (e ? e.code : '?') + '，可试试重新导入');
+        // 自动重试一次（服务刚起来 / 请求被打断的情况很常见）
+        setTimeout(function(){ reviveTrack(k, function(ok){
+          if(!ok) toast('音轨加载失败（' + k + '）：' + (e ? e.code : '?')
+                        + '，可在 ☰ 里重新导入这首歌');
+        }); }, 800);
       });
       players[k] = {el, gain:g};
     }
@@ -364,14 +368,32 @@ function applyMode(imm){
   setBigTitle();
 }
 
+/* 某条音轨没加载出来时，重新拉一次（服务重启、请求被打断都能自愈） */
+function reviveTrack(k, cb){
+  const el = players[k] && players[k].el;
+  if(!el){ if(cb) cb(false); return; }
+  if(el.readyState >= 2){ if(cb) cb(true); return; }
+  const src = el.currentSrc || el.src;
+  if(!src){ if(cb) cb(false); return; }
+  let done = false;
+  const finish = function(ok){ if(done) return; done = true; if(cb) cb(ok); };
+  const onOk = function(){ finish(true); };
+  el.addEventListener('loadeddata', onOk, {once:true});
+  el.addEventListener('canplay', onOk, {once:true});
+  try{
+    el.load();                                  // 重新发起请求
+  }catch(e){ try{ el.src = src; }catch(e2){} }
+  setTimeout(function(){ finish(el.readyState >= 2); }, 5000);
+}
+
 /* 切轨前先把目标轨救活并对齐，避免"切过去没声音" */
 function repairTrack(k){
   const el = players[k] && players[k].el;
   const m = players.original.el;
   if(!el) return;
   try{
+    if(el.readyState < 2){ reviveTrack(k, null); return; }
     if(m.paused) return;                       // 没在播就不用救
-    if(el.readyState < 2) return;              // 还没加载好，交给 syncLoop
     if(el.seeking) return;
     if(Math.abs(el.currentTime - m.currentTime) > 0.20){
       el.currentTime = m.currentTime;
@@ -1210,6 +1232,14 @@ window.__onBack = function(){
 (async function start(){
   initAudio();
   initLyrSize();
+  // 心跳：告诉本地服务"页面还在"，别把服务停了
+  // （否则切到伴奏时那一轨要去请求服务端，服务没了就永远没声音）
+  setInterval(function(){
+    try{ fetch('/api/ping', {cache:'no-store'}).catch(function(){}); }catch(e){}
+  }, 5000);
+  addEventListener('beforeunload', function(){
+    try{ navigator.sendBeacon('/api/bye'); }catch(e){}
+  });
   if(NATIVE){
     const dz = $('#dropZone');
     if(dz) dz.innerHTML = '＋ 导入新歌（依次选择【原唱】和【伴奏】）<br><small>支持 mp3 / m4a / wav / flac 等</small>';
