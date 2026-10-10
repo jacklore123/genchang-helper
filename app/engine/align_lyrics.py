@@ -103,12 +103,13 @@ def write_lrc(path, meta, lines):
 # --------------------------------------------------------------------------- #
 def decode_mono(path, sr=SR):
     import imageio_ffmpeg
+    import subproc
     ff = imageio_ffmpeg.get_ffmpeg_exe()
     fd, tmp = tempfile.mkstemp(suffix=".f32")
     os.close(fd)
     try:
-        subprocess.run([ff, "-y", "-v", "error", "-i", path, "-vn", "-ac", "1",
-                        "-ar", str(sr), "-f", "f32le", tmp], check=True)
+        subproc.run([ff, "-y", "-v", "error", "-i", path, "-vn", "-ac", "1",
+                     "-ar", str(sr), "-f", "f32le", tmp], check=True)
         return np.fromfile(tmp, dtype="<f4")
     finally:
         try:
