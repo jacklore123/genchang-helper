@@ -41,6 +41,22 @@ DEFAULT_MODEL = "UVR-MDX-NET-Inst_HQ_3.onnx"
 
 STORE: dict = {}
 STORE_LOCK = threading.Lock()
+LAST_PING = [0.0]                # 页面最后一次心跳（0 = 还没收到过）
+SEEN_PING = [False]              # 是否收到过至少一次真实心跳
+SERVER_START = [time.time()]
+PING_TIMEOUT = [90.0]            # 收到过心跳后，多久没心跳就认为窗口没了
+NEVER_LOADED_TIMEOUT = 180.0     # 一直没等到页面，多久放弃
+REQLOG = os.environ.get("GENCHANG_REQLOG")   # 诊断用：把每个请求写进文件
+
+
+def _log(msg):
+    if not REQLOG:
+        return
+    try:
+        with open(REQLOG, "a", encoding="utf-8") as f:
+            f.write("%.2f  %s\n" % (time.time(), msg))
+    except Exception:
+        pass
 
 
 # --------------------------------------------------------------------------- #
@@ -342,10 +358,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urllib.parse.urlparse(self.path)
         path = urllib.parse.unquote(u.path)
+        _log("GET %s" % path)
 
         if path in ("/", "/index.html"):
             return self._file(os.path.join(UI_DIR, "index.html"), "text/html; charset=utf-8")
         if path == "/api/ping":
+            LAST_PING[0] = time.time()
+            SEEN_PING[0] = True
             return self._json({"ok": True, "app": APP_NAME, "library": library_dir(),
                                "model": os.path.basename(model_path() or ""),
                                "can_import": model_path() is not None})
@@ -542,6 +561,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         u = urllib.parse.urlparse(self.path)
+        _log("POST %s" % urllib.parse.unquote(u.path))
+        if u.path == "/api/bye":
+            # 页面正在关闭（beforeunload 的 sendBeacon）。
+            # 注意：**不能在这里直接结束进程** —— beforeunload 也可能由一次
+            # 页面重载误触发，那会把整个程序干掉，用户看到的就是"点一下程序就废了"。
+            # 这里只是把心跳时间往前推，让守卫 10 秒后自然回收；
+            # 期间只要页面再发一次心跳（比如重载完成）就自动续命。
+            if SEEN_PING[0]:
+                LAST_PING[0] = time.time() - max(0.0, PING_TIMEOUT[0] - 10.0)
+            return self._send(200, b"bye", "text/plain")
         if u.path not in ("/api/import", "/api/import_pair", "/api/import_lyrics"):
             return self._send(404, b"not found", "text/plain")
 
@@ -655,6 +684,35 @@ def find_browser():
     return None
 
 
+def _watchdog(ping_timeout=90.0, grace=15.0):
+    """页面心跳守卫。
+
+    不能再用「等 Edge 启动器进程退出」来判断窗口关闭 ——
+    Edge 把窗口交给真正的浏览器进程后，启动器就立刻退出了，
+    服务会跟着被杀掉；此时界面还开着，凡是需要新发请求的资源
+    （比如伴奏那一轨）就永远加载不出来。
+
+    改成看心跳：页面每 5 秒 ping 一次，超过 ping_timeout 没消息才退出。
+    **必须先收到过至少一次真实心跳**，否则只按"页面一直没起来"处理，
+    避免 WebView2 初始化慢之类的原因把程序误杀。
+    """
+    PING_TIMEOUT[0] = ping_timeout
+    time.sleep(grace)
+    while True:
+        time.sleep(3)
+        now = time.time()
+        if not SEEN_PING[0]:
+            if now - SERVER_START[0] > NEVER_LOADED_TIMEOUT:
+                print("页面始终没有连上，退出。")
+                sys.stdout.flush()
+                os._exit(0)
+            continue
+        if now - LAST_PING[0] > PING_TIMEOUT[0]:
+            print("页面已失联，退出。")
+            sys.stdout.flush()
+            os._exit(0)
+
+
 def main(on_ready=None):
     os.makedirs(library_dir(), exist_ok=True)
     seed_library()
@@ -663,6 +721,7 @@ def main(on_ready=None):
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     srv.daemon_threads = True
     threading.Thread(target=srv.serve_forever, daemon=True).start()
+    LAST_PING[0] = time.time()
 
     print(f"{APP_NAME} 已在运行")
     print(f"  地址：{url}")
@@ -683,14 +742,9 @@ def main(on_ready=None):
                 "--window-size=460,900", "--window-position=200,60",
                 "--disable-gpu-driver-bug-workarounds"] + QUIET_FLAGS
         print(f"  打开窗口：{os.path.basename(br)}")
-        p = subprocess.Popen(args)
+        subprocess.Popen(args)                    # 不等它，靠心跳判断存活
         if on_ready:
             on_ready()
-        try:
-            p.wait()
-        except KeyboardInterrupt:
-            pass
-        print("窗口已关闭，退出。")
     else:
         print("  未打开窗口（GENCHANG_NO_WINDOW 或没找到 Edge/Chrome）。")
         print("  请用浏览器打开上面的地址；按 Ctrl+C 退出。")
@@ -702,11 +756,15 @@ def main(on_ready=None):
                 pass
         if on_ready:
             on_ready()
-        try:
-            while True:
-                time.sleep(1)
-        except KeyboardInterrupt:
-            pass
+
+    threading.Thread(target=_watchdog, daemon=True, kwargs={
+        "ping_timeout": float(os.environ.get("GENCHANG_PING_TIMEOUT") or 90.0),
+        "grace": float(os.environ.get("GENCHANG_GRACE") or 15.0)}).start()
+    try:
+        while True:
+            time.sleep(3600)
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":
