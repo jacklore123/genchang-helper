@@ -32,6 +32,18 @@ OWNER = "jacklore123"
 API = "api.github.com"
 UPLOAD_HOST = "uploads.github.com"
 
+# 资产名一律用 ASCII。
+# 中文名在 http.client 的请求行里会被 GitHub 解析坏（实测变成 default.exe / -.mp3），
+# 而且中文下载链接在别处也容易出问题。这里用英文名 + 发布说明里的中文对照表。
+ASSET_NAMES = {
+    "跟唱助手.exe": "genchang-helper-windows.exe",
+    "跟唱助手.apk": "genchang-helper-android.apk",
+    "伴奏分离器.exe": "accompaniment-separator-windows.exe",
+    "紫荆花盛开-伴奏.mp3": "zijinghuashengkai-accompaniment.mp3",
+    "合唱歌词小纸条（打印用）.docx": "lyrics-cards-A4.docx",
+    "使用说明.txt": "README-zh.txt",
+}
+
 
 def api(method, path, token, data=None):
     body = json.dumps(data).encode() if data is not None else None
@@ -90,14 +102,16 @@ RELEASE_BODY = """## 跟唱助手 · 紫荆花盛开版
 
 一边原唱、一键切伴奏的课堂跟唱工具。**下载对应文件就能用，不需要装任何环境。**
 
-| 文件 | 给谁用 | 说明 |
+| 下载文件 | 就是 | 给谁用 |
 |---|---|---|
-| `跟唱助手.exe` | 电脑（Windows） | 双击就用，**已内置《紫荆花盛开》** |
-| `跟唱助手.apk` | 学生手机（安卓） | 传过去点一下安装 |
-| `伴奏分离器.exe` | 老师备课 | 把 MP3/MP4 拖上去 → 出伴奏和人声 |
-| `紫荆花盛开-伴奏.mp3` | 舞台/音响 | 320k MP3，拷 U 盘直接放 |
-| `合唱歌词小纸条（打印用）.docx` | 打印 | 一页 A4 六张，剪开发给同学 |
-| `使用说明.txt` | 所有人 | 先看这个 |
+| **`genchang-helper-windows.exe`** | 跟唱助手.exe | 电脑（Windows）· 双击就用，已内置《紫荆花盛开》 |
+| **`genchang-helper-android.apk`** | 跟唱助手.apk | 学生手机（安卓）· 传过去点一下安装 |
+| `accompaniment-separator-windows.exe` | 伴奏分离器.exe | 老师备课 · 把 MP3/MP4 拖上去 → 出伴奏和人声 |
+| `zijinghuashengkai-accompaniment.mp3` | 紫荆花盛开-伴奏.mp3 | 舞台/音响 · 320k MP3，拷 U 盘直接放 |
+| `lyrics-cards-A4.docx` | 合唱歌词小纸条.docx | 打印 · 一页 A4 六张，剪开发给同学 |
+| `README-zh.txt` | 使用说明.txt | 先看这个 |
+
+> 资产名用英文是为了下载链接稳定（中文名会被服务端解析坏），文件内容全是中文，不影响使用。
 
 ### 怎么用
 
@@ -167,7 +181,7 @@ def main():
     for f in sorted(os.listdir(delivery)):
         full = os.path.join(delivery, f)
         if os.path.isfile(full):
-            assets.append((full, f))
+            assets.append((full, ASSET_NAMES.get(f, f)))
     if not assets:
         sys.exit("交付目录是空的：%s" % delivery)
 
@@ -196,13 +210,20 @@ def main():
         print("\n已创建 Release id=%s" % rel["id"])
 
     rel_id = rel["id"]
-    existing = {a["name"] for a in rel.get("assets", [])}
+    existing = {a["name"]: a for a in rel.get("assets", [])}
+
+    # 清掉上一次传坏的资产（名字不对的）
+    bad = [a for a in rel.get("assets", []) if a["name"] not in {n for _, n in assets}]
+    for a in bad:
+        st, _ = api("DELETE", "/repos/%s/%s/releases/assets/%d"
+                    % (args.owner, args.repo, a["id"]), token)
+        print("清理无用资产 %s → HTTP %s" % (a["name"], st))
 
     for path, name in assets:
         if name in existing:
             print("\n跳过（已存在）：%s" % name)
             continue
-        print("\n上传 %s (%.1f MB)…" % (name, os.path.getsize(path) / 1e6), flush=True)
+        print("\n上传 %s  (%.1f MB)…" % (name, os.path.getsize(path) / 1e6), flush=True)
         try:
             a = upload_asset(args.owner, args.repo, rel_id, token, path, name)
             print("   ✓ %s  →  %s" % (name, a.get("browser_download_url", "")))
